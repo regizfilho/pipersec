@@ -1,0 +1,142 @@
+// Package profile defines VPN profiles and renders safe swanctl configuration.
+package profile
+
+import (
+	"fmt"
+	"regexp"
+	"strings"
+)
+
+var namePattern = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
+
+// Profile holds the connection data and its two secrets.
+// Secrets are encrypted by the store package before being persisted.
+type Profile struct {
+	Name          string `json:"name"`
+	RemoteAddress string `json:"remote_address"`
+	Version       int    `json:"version"`
+	Aggressive    bool   `json:"aggressive"`
+	VirtualIP     string `json:"virtual_ip"`
+	Pull          bool   `json:"pull"`
+	IKEProposal   string `json:"ike_proposal"`
+	ESPProposal   string `json:"esp_proposal"`
+	ReauthTime    string `json:"reauth_time"`
+	DPDDelay      string `json:"dpd_delay"`
+	DPDTimeout    string `json:"dpd_timeout"`
+	XAuthUsername string `json:"xauth_username"`
+	XAuthPassword string `json:"xauth_password"`
+	PSKIdentity   string `json:"psk_identity"`
+	PSK           string `json:"psk"`
+	RemoteTS      string `json:"remote_ts"`
+	LifeTime      string `json:"life_time"`
+	RekeyTime     string `json:"rekey_time"`
+}
+
+// Defaults returns secure, practical defaults equivalent to the supplied
+// IKEv1/XAuth strongSwan profile. Credentials are intentionally empty.
+func Defaults(name string) Profile {
+	return Profile{Name: name, Version: 1, Aggressive: true, VirtualIP: "0.0.0.0", Pull: true,
+		IKEProposal: "aes256-sha256-ecp384", ESPProposal: "aes256-sha256-ecp384",
+		ReauthTime: "43200s", DPDDelay: "30s", DPDTimeout: "150s", RemoteTS: "0.0.0.0/0",
+		LifeTime: "43200s", RekeyTime: "38880s"}
+}
+
+// Validate checks all fields that affect generated strongSwan configuration.
+func (p Profile) Validate(requireSecrets bool) error {
+	if !namePattern.MatchString(p.Name) {
+		return fmt.Errorf("nome inválido %q: use letras, números, _ ou -", p.Name)
+	}
+	if p.RemoteAddress == "" {
+		return fmt.Errorf("endereço remoto é obrigatório")
+	}
+	if p.Version != 1 && p.Version != 2 {
+		return fmt.Errorf("versão IKE deve ser 1 ou 2")
+	}
+	if p.XAuthUsername == "" {
+		return fmt.Errorf("usuário XAuth é obrigatório")
+	}
+	if p.PSKIdentity == "" {
+		return fmt.Errorf("identidade PSK é obrigatória")
+	}
+	if requireSecrets && (p.XAuthPassword == "" || p.PSK == "") {
+		return fmt.Errorf("senha XAuth e PSK são obrigatórias")
+	}
+	for field, value := range map[string]string{"endereço remoto": p.RemoteAddress, "VIP": p.VirtualIP, "proposta IKE": p.IKEProposal, "proposta ESP": p.ESPProposal, "reautenticação": p.ReauthTime, "DPD delay": p.DPDDelay, "DPD timeout": p.DPDTimeout, "usuário XAuth": p.XAuthUsername, "identidade PSK": p.PSKIdentity, "sub-rede remota": p.RemoteTS, "life time": p.LifeTime, "rekey time": p.RekeyTime, "senha XAuth": p.XAuthPassword, "PSK": p.PSK} {
+		if strings.ContainsAny(value, "\r\n\x00") {
+			return fmt.Errorf("%s contém caractere de controle", field)
+		}
+	}
+	return nil
+}
+
+func quoted(v string) string {
+	return `"` + strings.ReplaceAll(strings.ReplaceAll(v, `\`, `\\`), `"`, `\"`) + `"`
+}
+
+// RenderConnection returns a self-contained swanctl connection configuration.
+func (p Profile) RenderConnection() (string, error) {
+	if err := p.Validate(false); err != nil {
+		return "", err
+	}
+	return fmt.Sprintf(`connections {
+    %s {
+        version = %d
+        aggressive = %s
+        remote_addrs = %s
+        vips = %s
+        pull = %s
+        proposals = %s
+        reauth_time = %s
+        rand_time = 0s
+        dpd_delay = %s
+        dpd_timeout = %s
+        local { auth = psk }
+        local-xauth {
+            auth = xauth
+            round = 1
+            xauth_id = %s
+        }
+        remote { auth = psk }
+        children {
+            %s {
+                mode = tunnel
+                local_ts = dynamic
+                remote_ts = %s
+                esp_proposals = %s
+                life_time = %s
+                rekey_time = %s
+                rand_time = 0s
+                replay_window = 32
+                dpd_action = restart
+                start_action = none
+            }
+        }
+    }
+}
+`, p.Name, p.Version, yesNo(p.Aggressive), p.RemoteAddress, p.VirtualIP, yesNo(p.Pull), p.IKEProposal, p.ReauthTime, p.DPDDelay, p.DPDTimeout, quoted(p.XAuthUsername), p.Name, p.RemoteTS, p.ESPProposal, p.LifeTime, p.RekeyTime), nil
+}
+
+func yesNo(value bool) string {
+	if value {
+		return "yes"
+	}
+	return "no"
+}
+
+// RenderSecrets returns the credentials file expected by swanctl.
+func (p Profile) RenderSecrets() (string, error) {
+	if err := p.Validate(true); err != nil {
+		return "", err
+	}
+	return fmt.Sprintf(`secrets {
+    xauth-%s {
+        id = %s
+        secret = %s
+    }
+    ike-%s {
+        id = %s
+        secret = %s
+    }
+}
+`, p.Name, quoted(p.XAuthUsername), quoted(p.XAuthPassword), p.Name, quoted(p.PSKIdentity), quoted(p.PSK)), nil
+}

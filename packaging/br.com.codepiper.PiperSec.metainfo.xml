@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>br.com.codepiper.PiperSec</id>
+  <name>PiperSec - Conexão VPN via IpSec</name>
+  <summary>Conexão VPN via IpSec com UI moderna e fácil de configurar</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+  <developer id="br.com.codepiper">
+    <name>Reginaldo Filho - CodePiper</name>
+  </developer>
+  <url type="homepage">https://www.codepiper.com.br</url>
+  <url type="contact">https://www.codepiper.com.br</url>
+  <launchable type="desktop-id">br.com.codepiper.PiperSec.desktop</launchable>
+  <provides><binary>vpnctl-gui</binary></provides>
+  <description>
+    <p>PiperSec gerencia conexões VPN IPsec com perfis persistentes e credenciais cifradas localmente.</p>
+    <p>Crie, edite, conecte, desconecte e consulte o estado de múltiplas VPNs strongSwan por uma interface gráfica simples.</p>
+  </description>
+  <releases><release version="1.0.0" date="2026-07-30"/></releases>
+  <content_rating type="oars-1.1"/>
+</component>

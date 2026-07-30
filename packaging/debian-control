@@ -1,0 +1,11 @@
+Package: vpnctl
+Version: @VERSION@
+Section: net
+Priority: optional
+Architecture: amd64
+Depends: strongswan, polkitd, python3-gi, gir1.2-gtk-3.0, gir1.2-ayatanaappindicator3-0.1
+Maintainer: Reginaldo Filho - CodePiper <contato@codepiper.com.br>
+Homepage: https://www.codepiper.com.br
+Description: PiperSec - conexão VPN via IpSec com UI moderna
+ PiperSec é um aplicativo gráfico para perfis VPN IPsec/strongSwan persistentes
+ e com credenciais cifradas localmente.

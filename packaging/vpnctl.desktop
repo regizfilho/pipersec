@@ -1,0 +1,12 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=PiperSec - Conexão VPN via IpSec
+Comment=Conexão VPN via IpSec com UI moderna e fácil de configurar
+Exec=/usr/bin/pipersec
+Icon=br.com.codepiper.PiperSec
+Terminal=false
+DBusActivatable=false
+StartupNotify=true
+Categories=Network;Security;
+Keywords=VPN;IPsec;strongSwan;

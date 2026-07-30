@@ -1,0 +1,6 @@
+#!/bin/sh
+set -e
+pkill -f '^/usr/bin/python3 /usr/lib/pipersec/pipersec.py$' || true
+rm -f /usr/share/applications/vpnctl.desktop
+update-desktop-database -q /usr/share/applications || true
+exit 0

@@ -1,0 +1,30 @@
+# Build e pacotes distribuíveis
+/bin/
+/dist/
+*.deb
+*.zip
+
+# Dados locais do PiperSec/vpnctl e arquivos de ambiente
+profiles.enc
+profiles.json
+master.key
+*.enc
+.env
+.env.*
+*.local
+
+# Chaves, certificados e segredos
+*.key
+*.pem
+*.crt
+*.cer
+*.p12
+*.pfx
+*.ovpn
+*.secrets
+
+# Arquivos temporários e de ferramentas
+__pycache__/
+*.py[cod]
+*.log
+.codebase-memory/
