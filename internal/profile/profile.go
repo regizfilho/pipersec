@@ -34,10 +34,12 @@ type Profile struct {
 
 // Defaults returns secure, practical defaults equivalent to the supplied
 // IKEv1/XAuth strongSwan profile. Credentials are intentionally empty.
+// remote_ts uses a restrictive default (single host) to enable split
+// tunneling — only traffic matching this selector goes through the VPN.
 func Defaults(name string) Profile {
 	return Profile{Name: name, Version: 1, Aggressive: true, VirtualIP: "0.0.0.0", Pull: true,
 		IKEProposal: "aes256-sha256-ecp384", ESPProposal: "aes256-sha256-ecp384",
-		ReauthTime: "43200s", DPDDelay: "30s", DPDTimeout: "150s", RemoteTS: "0.0.0.0/0",
+		ReauthTime: "43200s", DPDDelay: "30s", DPDTimeout: "150s", RemoteTS: "10.0.0.0/8",
 		LifeTime: "43200s", RekeyTime: "38880s"}
 }
 
@@ -61,9 +63,31 @@ func (p Profile) Validate(requireSecrets bool) error {
 	if requireSecrets && (p.XAuthPassword == "" || p.PSK == "") {
 		return fmt.Errorf("senha XAuth e PSK são obrigatórias")
 	}
+	if err := validateRemoteTS(p.RemoteTS); err != nil {
+		return err
+	}
 	for field, value := range map[string]string{"endereço remoto": p.RemoteAddress, "VIP": p.VirtualIP, "proposta IKE": p.IKEProposal, "proposta ESP": p.ESPProposal, "reautenticação": p.ReauthTime, "DPD delay": p.DPDDelay, "DPD timeout": p.DPDTimeout, "usuário XAuth": p.XAuthUsername, "identidade PSK": p.PSKIdentity, "sub-rede remota": p.RemoteTS, "life time": p.LifeTime, "rekey time": p.RekeyTime, "senha XAuth": p.XAuthPassword, "PSK": p.PSK} {
 		if strings.ContainsAny(value, "\r\n\x00") {
 			return fmt.Errorf("%s contém caractere de controle", field)
+		}
+	}
+	return nil
+}
+
+// validateRemoteTS checks that remote_ts is a valid comma-separated list of
+// CIDR networks, single IPs, or the special value 0.0.0.0/0.
+func validateRemoteTS(ts string) error {
+	if ts == "" {
+		return fmt.Errorf("sub-rede remota é obrigatória")
+	}
+	parts := strings.Split(ts, ",")
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part == "0.0.0.0/0" || part == "0.0.0.0" {
+			continue
+		}
+		if !strings.Contains(part, "/") && !strings.Contains(part, ".") {
+			return fmt.Errorf("sub-rede remota inválida %q: use formato CIDR (ex.: 10.0.0.0/8)", part)
 		}
 	}
 	return nil
@@ -78,6 +102,12 @@ func (p Profile) RenderConnection() (string, error) {
 	if err := p.Validate(false); err != nil {
 		return "", err
 	}
+	// Convert comma-separated networks to space-separated for strongSwan.
+	parts := strings.Split(p.RemoteTS, ",")
+	for i := range parts {
+		parts[i] = strings.TrimSpace(parts[i])
+	}
+	remoteTS := strings.Join(parts, " ")
 	return fmt.Sprintf(`connections {
     %s {
         version = %d
@@ -113,7 +143,7 @@ func (p Profile) RenderConnection() (string, error) {
         }
     }
 }
-`, p.Name, p.Version, yesNo(p.Aggressive), p.RemoteAddress, p.VirtualIP, yesNo(p.Pull), p.IKEProposal, p.ReauthTime, p.DPDDelay, p.DPDTimeout, quoted(p.XAuthUsername), p.Name, p.RemoteTS, p.ESPProposal, p.LifeTime, p.RekeyTime), nil
+`, p.Name, p.Version, yesNo(p.Aggressive), p.RemoteAddress, p.VirtualIP, yesNo(p.Pull), p.IKEProposal, p.ReauthTime, p.DPDDelay, p.DPDTimeout, quoted(p.XAuthUsername), p.Name, remoteTS, p.ESPProposal, p.LifeTime, p.RekeyTime), nil
 }
 
 func yesNo(value bool) string {

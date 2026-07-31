@@ -43,3 +43,31 @@ func TestProfileRejectsUnsafeName(t *testing.T) {
 		t.Fatal("expected validation error")
 	}
 }
+
+func TestDefaultRemoteTSIsSplitTunnel(t *testing.T) {
+	p := Defaults("test")
+	if p.RemoteTS == "0.0.0.0/0" {
+		t.Fatal("default remote_ts should not be 0.0.0.0/0 for split tunneling")
+	}
+}
+
+func TestMultipleRemoteTSNetworks(t *testing.T) {
+	p := ready()
+	p.RemoteTS = "10.0.0.0/8, 192.168.0.0/16"
+	got, err := p.RenderConnection()
+	if err != nil {
+		t.Fatal(err)
+	}
+	// strongSwan uses space-separated networks
+	if !strings.Contains(got, "remote_ts = 10.0.0.0/8 192.168.0.0/16") {
+		t.Errorf("multiple remote_ts not properly converted to space-separated format: %s", got)
+	}
+}
+
+func TestRejectsEmptyRemoteTS(t *testing.T) {
+	p := ready()
+	p.RemoteTS = ""
+	if err := p.Validate(true); err == nil {
+		t.Fatal("expected validation error for empty remote_ts")
+	}
+}
