@@ -27,6 +27,7 @@ type controller struct {
 	list     *widget.List
 	details  *widget.Label
 	message  *widget.Label
+	logsView *widget.Entry
 }
 
 func main() {
@@ -69,13 +70,26 @@ func (c *controller) build() {
 	connectButton := widget.NewButton("Conectar", c.connectSelected)
 	disconnectButton := widget.NewButton("Desconectar", c.disconnectSelected)
 	statusButton := widget.NewButton("Ver estado", c.statusSelected)
-	actions := container.NewGridWithColumns(3, connectButton, disconnectButton, statusButton)
-	right := container.NewBorder(
-		widget.NewLabel("Detalhes do perfil"),
-		container.NewVBox(actions, container.NewGridWithColumns(2, editButton, deleteButton), widget.NewSeparator(), c.message),
-		nil, nil, container.NewVScroll(c.details),
+	logsButton := widget.NewButton("Ver logs", c.showLogs)
+	actions := container.NewGridWithColumns(4, connectButton, disconnectButton, statusButton, logsButton)
+	c.logsView = widget.NewMultiLineEntry()
+	c.logsView.SetPlaceHolder("Logs de conexão aparecerão aqui...")
+	c.logsView.Disable()
+	logsContent := container.NewBorder(
+		widget.NewLabel("Logs de conexão"),
+		container.NewGridWithColumns(3,
+			widget.NewButton("Atualizar", c.refreshLogs),
+			widget.NewButton("Limpar", c.clearLogs),
+			widget.NewCheck("Rolagem automática", func(b bool) {}),
+		),
+		nil, nil, container.NewVScroll(c.logsView),
 	)
-	c.window.SetContent(container.NewHSplit(left, right))
+	tabs := container.NewAppTabs(
+		container.NewTabItem("Perfil", right),
+		container.NewTabItem("Logs", logsContent),
+	)
+	tabs.SetTabLocation(container.TabLocationTop)
+	c.window.SetContent(container.NewHSplit(left, tabs))
 }
 
 func (c *controller) refresh() {
@@ -134,7 +148,7 @@ func (c *controller) editProfile(index int) {
 	pskID := entry(p.PSKIdentity, "identidade PSK", false)
 	psk := entry("", "deixe vazio para manter", true)
 	vip := entry(p.VirtualIP, "0.0.0.0", false)
-	remoteTS := entry(p.RemoteTS, "0.0.0.0/0", false)
+	remoteTS := entry(p.RemoteTS, "10.0.0.0/8,192.168.1.0/24", false)
 	ike := entry(p.IKEProposal, "aes256-sha256-ecp384", false)
 	esp := entry(p.ESPProposal, "aes256-sha256-ecp384", false)
 	reauth := entry(p.ReauthTime, "43200s", false)
@@ -152,7 +166,7 @@ func (c *controller) editProfile(index int) {
 		widget.NewFormItem("Versão IKE", version), widget.NewFormItem("Usuário XAuth", user),
 		widget.NewFormItem("Senha XAuth", password), widget.NewFormItem("Identidade PSK", pskID),
 		widget.NewFormItem("Chave PSK", psk), widget.NewFormItem("VIP", vip),
-		widget.NewFormItem("Rede remota", remoteTS), widget.NewFormItem("Proposta IKE", ike),
+		widget.NewFormItem("Redes remotas (vírgula)", remoteTS), widget.NewFormItem("Proposta IKE", ike),
 		widget.NewFormItem("Proposta ESP", esp), widget.NewFormItem("Reautenticação", reauth),
 		widget.NewFormItem("DPD intervalo", dpdDelay), widget.NewFormItem("DPD timeout", dpdTimeout),
 		widget.NewFormItem("Vida do túnel", life), widget.NewFormItem("Rekey", rekey),
@@ -256,6 +270,45 @@ func (c *controller) statusSelected() {
 		return
 	}
 	dialog.ShowCustom("Estado: "+p.Name, "Fechar", container.NewVScroll(widget.NewLabel(status)), c.window)
+}
+
+func (c *controller) showLogs() {
+	p, ok := c.current()
+	if !ok {
+		return
+	}
+	c.refreshLogsForProfile(p.Name)
+}
+
+func (c *controller) refreshLogs() {
+	p, ok := c.current()
+	if !ok {
+		return
+	}
+	c.refreshLogsForProfile(p.Name)
+}
+
+func (c *controller) refreshLogsForProfile(name string) {
+	if err := strongswan.EnsureGraphicalPrerequisites(); err != nil {
+		c.error(err)
+		return
+	}
+	status, err := strongswan.NewGraphical().Status(name)
+	if err != nil {
+		c.error(err)
+		return
+	}
+	c.appendLog("=== Status " + name + " ===\n" + status + "\n")
+}
+
+func (c *controller) clearLogs() {
+	c.logsView.SetText("")
+}
+
+func (c *controller) appendLog(text string) {
+	current := c.logsView.Text
+	c.logsView.SetText(current + text + "\n")
+	c.logsView.CursorRow = len(strings.Split(c.logsView.Text, "\n"))
 }
 
 func (c *controller) error(err error) {

@@ -25,6 +25,7 @@ type view struct {
 	P                      profile.Profile
 	Edit                   bool
 	Message, Error, Status string
+	Logs                   string
 }
 
 //go:embed ux.html
@@ -52,6 +53,7 @@ func main() {
 	m.HandleFunc("/disconnect", u.disconnect)
 	m.HandleFunc("/delete", u.delete)
 	m.HandleFunc("/status", u.status)
+	m.HandleFunc("/logs", u.logs)
 	go func() {
 		_ = exec.Command("gio", "open", "http://127.0.0.1:8179").Start()
 	}()
@@ -160,4 +162,22 @@ func (u *ui) status(w http.ResponseWriter, r *http.Request) {
 	}
 	out, e := strongswan.NewGraphical().Status(p.Name)
 	render(w, view{P: p, Status: out, Error: errorText(e)})
+}
+
+func (u *ui) logs(w http.ResponseWriter, r *http.Request) {
+	p, e := u.profile(r)
+	if e != nil {
+		render(w, view{Error: e.Error()})
+		return
+	}
+	if err := strongswan.EnsureGraphicalPrerequisites(); err != nil {
+		render(w, view{Error: err.Error()})
+		return
+	}
+	out, e := strongswan.NewGraphical().Status(p.Name)
+	if e != nil {
+		render(w, view{Error: e.Error()})
+		return
+	}
+	render(w, view{P: p, Logs: out, Message: "Logs atualizados."})
 }

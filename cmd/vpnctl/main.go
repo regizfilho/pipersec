@@ -128,7 +128,7 @@ func defineProfileFlags(fs *flag.FlagSet, p *profile.Profile) {
 	fs.StringVar(&p.XAuthPassword, "password", p.XAuthPassword, "senha XAuth")
 	fs.StringVar(&p.PSKIdentity, "psk-id", p.PSKIdentity, "identidade associada à PSK")
 	fs.StringVar(&p.PSK, "psk", p.PSK, "chave pré-compartilhada")
-	fs.StringVar(&p.RemoteTS, "remote-ts", p.RemoteTS, "rede remota")
+	fs.StringVar(&p.RemoteTS, "remote-ts", p.RemoteTS, "redes remotas (separadas por vírgula, ex.: 10.0.0.0/8,192.168.1.0/24)")
 	fs.StringVar(&p.LifeTime, "life-time", p.LifeTime, "vida do child SA")
 	fs.StringVar(&p.RekeyTime, "rekey-time", p.RekeyTime, "tempo de rekey")
 }
@@ -201,7 +201,7 @@ func show(s *store.Store, args []string) error {
 	if err != nil {
 		return err
 	}
-	fmt.Printf("Nome: %s\nGateway: %s\nIKE: v%d (agressivo: %t)\nUsuário XAuth: %s\nIdentidade PSK: %s\nVIP: %s\nPropostas: %s / %s\nRede remota: %s\nSegredos: armazenados cifrados (ocultos)\n", p.Name, p.RemoteAddress, p.Version, p.Aggressive, p.XAuthUsername, p.PSKIdentity, p.VirtualIP, p.IKEProposal, p.ESPProposal, p.RemoteTS)
+	fmt.Printf("Nome: %s\nGateway: %s\nIKE: v%d (agressivo: %t)\nUsuário XAuth: %s\nIdentidade PSK: %s\nVIP: %s\nPropostas: %s / %s\nRedes remotas: %s\nSegredos: armazenados cifrados (ocultos)\n", p.Name, p.RemoteAddress, p.Version, p.Aggressive, p.XAuthUsername, p.PSKIdentity, p.VirtualIP, p.IKEProposal, p.ESPProposal, p.RemoteTS)
 	return nil
 }
 func deleteProfile(s *store.Store, args []string) error {
