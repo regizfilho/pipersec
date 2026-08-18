@@ -37,6 +37,7 @@ class PiperSec(Gtk.Application):
         self._profiles = {}
 
     def do_activate(self):
+        self._busy=False
         self.win=Gtk.ApplicationWindow(application=self)
         self.win.set_title("PiperSec — Conexão VPN via IpSec")
         self.win.set_default_size(820,560)
@@ -183,7 +184,6 @@ class PiperSec(Gtk.Application):
                 return
             self._polling=True
             try:
-                GLib.idle_add(self.spinner.start)
                 results={}
                 try:
                     names=[p["name"] for p in profiles()]
@@ -197,7 +197,6 @@ class PiperSec(Gtk.Application):
                 GLib.idle_add(self.apply_status,results)
             finally:
                 self._polling=False
-                GLib.idle_add(self.spinner.stop)
         threading.Thread(target=worker,daemon=True).start()
         return True
 
@@ -282,9 +281,10 @@ class PiperSec(Gtk.Application):
 
     def update_toggle_label(self):
         name=self.selected_name()
-        if not name:
-            self.toggle_btn.set_label("Conectar")
+        busy=getattr(self,"_busy",False)
+        if not name or busy:
             self.toggle_btn.set_sensitive(False)
+            self.toggle_btn.set_label("Conectar")
             return
         self.toggle_btn.set_sensitive(True)
         self.toggle_btn.set_label("Desconectar" if name in self._connected_names else "Conectar")
@@ -297,6 +297,8 @@ class PiperSec(Gtk.Application):
         name=self.selected_name()
         if not name:
             self.error("Selecione um perfil.")
+            return
+        if getattr(self,"_busy",False):
             return
         self.set_busy(True,"Consultando estado…")
         def worker():
@@ -330,6 +332,7 @@ class PiperSec(Gtk.Application):
         self.send_notification("vpn-status",note)
 
     def set_busy(self, busy, message=""):
+        self._busy=busy
         for button in self.action_buttons:
             button.set_sensitive(not busy)
         if busy:
@@ -337,8 +340,11 @@ class PiperSec(Gtk.Application):
             self.status_label.set_markup("<span foreground='#d88a00'><b>● %s</b></span>" % message)
         else:
             self.spinner.stop()
+        self.update_toggle_label()
 
     def start_vpn_action(self, command, profile):
+        if getattr(self,"_busy",False):
+            return
         self.set_busy(True, "Conectando…" if command == "gui-connect" else "Desconectando…")
         def worker():
             try:
@@ -357,7 +363,6 @@ class PiperSec(Gtk.Application):
             self.notify("VPN conectada","PiperSec conectou o perfil "+profile)
         else:
             self.notify("VPN desconectada","PiperSec desconectou o perfil "+profile)
-        self.update_toggle_label()
         GLib.idle_add(self.poll_status)
         return False
 
