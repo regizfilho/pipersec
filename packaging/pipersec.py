@@ -7,9 +7,10 @@ from gi.repository import Gtk, AyatanaAppIndicator3, Gdk, Gio, GLib
 DEFAULTS = {"version":1,"aggressive":True,"virtual_ip":"0.0.0.0","pull":True,"ike_proposal":"aes256-sha256-ecp384","esp_proposal":"aes256-sha256-ecp384","reauth_time":"43200s","dpd_delay":"30s","dpd_timeout":"150s","remote_ts":"0.0.0.0/0","life_time":"43200s","rekey_time":"38880s"}
 
 POLL_MS = 2000
+CMD_TIMEOUT = 15
 
-def run(args, data=None):
-    p=subprocess.run(["/usr/bin/vpnctl"]+args,input=data,text=True,capture_output=True)
+def run(args, data=None, timeout=CMD_TIMEOUT):
+    p=subprocess.run(["/usr/bin/vpnctl"]+args,input=data,text=True,capture_output=True,timeout=timeout)
     if p.returncode:
         raise RuntimeError(p.stderr.strip() or "Operação não concluída")
     return p.stdout
@@ -107,6 +108,10 @@ class PiperSec(Gtk.Application):
             self.ctx_menu.append(item)
         self.ctx_menu.show_all()
 
+        self.spinner=Gtk.Spinner()
+        self.spinner.set_tooltip_text("Aguardando resposta do strongSwan…")
+        bar.pack_end(self.spinner,False,False,0)
+
         self.win.connect("delete-event",lambda *_:(self.win.hide(),True)[1])
         self.create_logs_window()
         self.refresh()
@@ -174,17 +179,25 @@ class PiperSec(Gtk.Application):
 
     def poll_status(self):
         def worker():
-            results={}
+            if getattr(self,"_polling",False):
+                return
+            self._polling=True
             try:
-                names=[p["name"] for p in profiles()]
-            except Exception:
-                names=[]
-            for name in names:
+                GLib.idle_add(self.spinner.start)
+                results={}
                 try:
-                    results[name]=query_sas(name)
+                    names=[p["name"] for p in profiles()]
                 except Exception:
-                    results[name]=None
-            GLib.idle_add(self.apply_status,results)
+                    names=[]
+                for name in names:
+                    try:
+                        results[name]=query_sas(name)
+                    except Exception:
+                        results[name]=None
+                GLib.idle_add(self.apply_status,results)
+            finally:
+                self._polling=False
+                GLib.idle_add(self.spinner.stop)
         threading.Thread(target=worker,daemon=True).start()
         return True
 
@@ -220,17 +233,39 @@ class PiperSec(Gtk.Application):
 
     def render_rows(self):
         prev=self.selected_name()
-        self.store.clear()
-        rows={}
+        desired={}
         for p in self._profiles.values():
             name=p["name"]
             conn=name in self._connected_names
             state="● Conectado" if conn else "—"
             ri,ro=self._rates.get(name,(0,0))
             net="↓%s  ↑%s" % (human_rate(ri),human_rate(ro)) if conn else ""
-            rows[name]=self.store.append([name,p["remote_address"],p["xauth_username"],state,net])
-        if prev in rows:
-            self.tree.get_selection().select_iter(rows[prev])
+            desired[name]=[name,p["remote_address"],p["xauth_username"],state,net]
+        if self.store.get_iter_first() is None:
+            for vals in desired.values():
+                self.store.append(vals)
+        else:
+            it=self.store.get_iter_first()
+            while it is not None:
+                name=self.store.get_value(it,0)
+                nxt=self.store.iter_next(it)
+                if name in desired:
+                    vals=desired.pop(name)
+                    for col in range(5):
+                        if self.store.get_value(it,col)!=vals[col]:
+                            self.store.set_value(it,col,vals[col])
+                else:
+                    self.store.remove(it)
+                it=nxt
+            for vals in desired.values():
+                self.store.append(vals)
+        if prev:
+            it=self.store.get_iter_first()
+            while it is not None:
+                if self.store.get_value(it,0)==prev:
+                    self.tree.get_selection().select_iter(it)
+                    break
+                it=self.store.iter_next(it)
         self.update_toggle_label()
 
     def render_state_color(self, col, renderer, model, it, data=None):
@@ -298,7 +333,20 @@ class PiperSec(Gtk.Application):
         for button in self.action_buttons:
             button.set_sensitive(not busy)
         if busy:
+            self.spinner.start()
             self.status_label.set_markup("<span foreground='#d88a00'><b>● %s</b></span>" % message)
+        else:
+            self.spinner.stop()
+
+    def start_vpn_action(self, command, profile):
+        self.set_busy(True, "Conectando…" if command == "gui-connect" else "Desconectando…")
+        def worker():
+            try:
+                result=(None,run([command,profile]))
+            except Exception as error:
+                result=(str(error),None)
+            GLib.idle_add(self.finish_vpn_action,command,profile,result[0])
+        threading.Thread(target=worker,daemon=True).start()
 
     def finish_vpn_action(self, command, profile, error):
         self.set_busy(False)

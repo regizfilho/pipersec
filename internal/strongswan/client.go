@@ -124,6 +124,8 @@ func (c *Client) Connect(p profile.Profile) error {
 // Disconnect terminates the active IKE SA. swanctl deliberately has no
 // per-connection unload operation, so its loaded definition remains available
 // for a subsequent reconnect without touching unrelated system profiles.
+// "no matching SAs to terminate found" means it is already down, which is a
+// successful disconnect.
 func (c *Client) Disconnect(p profile.Profile) error {
 	if err := p.Validate(false); err != nil {
 		return err
@@ -139,7 +141,11 @@ func (c *Client) Disconnect(p profile.Profile) error {
 		}
 		return nil
 	}
-	return c.run("--terminate", "--ike", p.Name)
+	err := c.run("--terminate", "--ike", p.Name)
+	if err != nil && strings.Contains(err.Error(), "no matching SAs to terminate found") {
+		return nil
+	}
+	return err
 }
 
 func (c *Client) Status(name string) (string, error) {

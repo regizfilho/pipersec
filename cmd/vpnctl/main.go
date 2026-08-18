@@ -442,6 +442,9 @@ func privilegedDisconnect(args []string) error {
 	}
 	out, err := exec.Command("swanctl", "--terminate", "--ike", args[0]).CombinedOutput()
 	if err != nil {
+		if strings.Contains(string(out), "no matching SAs to terminate found") {
+			return nil
+		}
 		return fmt.Errorf("swanctl terminate: %w\n%s", err, strings.TrimSpace(string(out)))
 	}
 	return nil
