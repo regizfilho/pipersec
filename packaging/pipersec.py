@@ -160,8 +160,9 @@ class PiperSec(Gtk.Application):
         self.status_label.set_markup("<span foreground='%s'><b>● %s</b></span>" % (color,text))
 
     def update_rates(self, name, sas, now):
-        total_in=sum(c["bytes_in"] for c in sas["children"])
-        total_out=sum(c["bytes_out"] for c in sas["children"])
+        children=sas.get("children") or []
+        total_in=sum(c["bytes_in"] for c in children)
+        total_out=sum(c["bytes_out"] for c in children)
         prev=self._prevs.get(name)
         self._prevs[name]=(total_in,total_out,now)
         if not prev:
@@ -218,14 +219,18 @@ class PiperSec(Gtk.Application):
         return False
 
     def render_rows(self):
+        prev=self.selected_name()
         self.store.clear()
+        rows={}
         for p in self._profiles.values():
             name=p["name"]
             conn=name in self._connected_names
             state="● Conectado" if conn else "—"
             ri,ro=self._rates.get(name,(0,0))
             net="↓%s  ↑%s" % (human_rate(ri),human_rate(ro)) if conn else ""
-            self.store.append([name,p["remote_address"],p["xauth_username"],state,net])
+            rows[name]=self.store.append([name,p["remote_address"],p["xauth_username"],state,net])
+        if prev in rows:
+            self.tree.get_selection().select_iter(rows[prev])
         self.update_toggle_label()
 
     def render_state_color(self, col, renderer, model, it, data=None):
@@ -234,8 +239,8 @@ class PiperSec(Gtk.Application):
 
     def render_profile_color(self, col, renderer, model, it, data=None):
         connected=self.store.get_value(it,3).startswith("●")
-        renderer.set_property("foreground","#000000" if connected else "#000000")
         renderer.set_property("weight",700 if connected else 400)
+        renderer.set_property("foreground-set",False)
 
     def on_selection_changed(self, selection):
         self.update_toggle_label()
@@ -258,7 +263,19 @@ class PiperSec(Gtk.Application):
         if not name:
             self.error("Selecione um perfil.")
             return
-        if name in self._connected_names:
+        self.set_busy(True,"Consultando estado…")
+        def worker():
+            try:
+                sas=query_sas(name)
+                connected=sas.get("connected",False)
+            except Exception:
+                connected=name in self._connected_names
+            GLib.idle_add(self.finish_toggle,name,connected)
+        threading.Thread(target=worker,daemon=True).start()
+
+    def finish_toggle(self, name, connected):
+        self.set_busy(False)
+        if connected:
             self.start_vpn_action("gui-disconnect",name)
         else:
             self.start_vpn_action("gui-connect",name)
@@ -376,7 +393,32 @@ class PiperSec(Gtk.Application):
         pull.set_tooltip_text("Equivale a pull=yes.")
         setup.attach(pull,1,2,1,1)
         text(setup,3,"IP virtual solicitado","virtual_ip","Use 0.0.0.0 para receber IP virtual do servidor.")
-        text(setup,4,"Rede remota","remote_ts","0.0.0.0/0 envia todo o tráfego pelo túnel.")
+        routing=Gtk.ComboBoxText()
+        routing.append("all","Enviar todo o tráfego pelo túnel")
+        routing.append("split","Somente redes abaixo (split tunneling)")
+        current_rt=(p.get("remote_ts") or "").strip()
+        is_split = current_rt not in ("", "0.0.0.0/0")
+        routing.set_active_id("split" if is_split else "all")
+        routing.set_tooltip_text("Todo o tráfego: navegação, apps e tudo passa pelo túnel VPN. Somente redes: apenas os destinos listados abaixo passam pelo túnel; o restante (ex.: Google) sai direto pela internet local.")
+        setup.attach(Gtk.Label(label="Roteamento",xalign=0),0,4,1,1)
+        setup.attach(routing,1,4,1,1)
+        rt_entry=Gtk.Entry()
+        rt_entry.set_text(current_rt if is_split else "10.0.0.0/8,192.168.1.0/24")
+        rt_entry.set_tooltip_text("Redes separadas por vírgula que devem passar pela VPN. Ex.: 10.0.0.0/8,192.168.1.0/24")
+        setup.attach(Gtk.Label(label="Redes pela VPN",xalign=0),0,5,1,1)
+        setup.attach(rt_entry,1,5,1,1)
+        rt_label=Gtk.Label(xalign=0)
+        setup.attach(rt_label,0,6,2,1)
+        fields["remote_ts"]=rt_entry
+        def on_routing_changed(cb):
+            split=cb.get_active_id()=="split"
+            rt_entry.set_sensitive(split)
+            rt_label.set_markup("<span foreground='#888' size='small'>%s</span>" % (
+                "Só o tráfego das redes acima passa pela VPN. Google, YouTube e o resto saem pela sua internet normal."
+                if split else
+                "Todo o tráfego do computador passará pela VPN (0.0.0.0/0)."))
+        routing.connect("changed",on_routing_changed)
+        on_routing_changed(routing)
         def combo(row,label,key,tip):
             c=Gtk.ComboBoxText()
             opts=["aes256-sha256-ecp384","aes256-sha256-modp2048","aes256-sha256-modp3072","aes128-sha256-modp2048"]
