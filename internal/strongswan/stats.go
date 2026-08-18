@@ -31,7 +31,7 @@ var (
 	ikeStateRe = regexp.MustCompile(`state=(\w+)`)
 	vipRe      = regexp.MustCompile(`local-vips=\[([^\]]*)\]`)
 	childName  = regexp.MustCompile(`name=([A-Za-z0-9_.-]+)`)
-	childStats = regexp.MustCompile(`state=(\w+).*?bytes-in=(\d+) packets-in=(\d+) bytes-out=(\d+) packets-out=(\d+)`)
+	childStats = regexp.MustCompile(`state=(\w+).*?bytes-in=(\d+)\s+packets-in=(\d+).*?bytes-out=(\d+)\s+packets-out=(\d+)`)
 	childTS    = regexp.MustCompile(`local-ts=\[([^\]]*)\] remote-ts=\[([^\]]*)\]`)
 )
 

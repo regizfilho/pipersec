@@ -77,9 +77,9 @@ class PiperSec(Gtk.Application):
             col.set_expand(i in (0,1))
             self.tree.append_column(col)
         self.state_col=self.tree.get_column(3)
-        self.state_renderer=self.state_col.get_cell_renderers()[0]
+        self.state_renderer=self.state_col.get_cells()[0]
         self.state_col.set_cell_data_func(self.state_renderer,self.render_state_color)
-        self.profile_renderer=self.tree.get_column(0).get_cell_renderers()[0]
+        self.profile_renderer=self.tree.get_column(0).get_cells()[0]
         self.tree.get_column(0).set_cell_data_func(self.profile_renderer,self.render_profile_color)
         self.tree.get_selection().set_mode(Gtk.SelectionMode.SINGLE)
         self.tree.get_selection().connect("changed",self.on_selection_changed)
