@@ -416,7 +416,44 @@ func privilegedConnect(args []string) error {
 	if err != nil {
 		return fmt.Errorf("swanctl initiate: %w\n%s", err, cleanSwanctlOutput(out))
 	}
+	// In pull/XAuth mode start_action does not reliably trigger the children,
+	// so start every child explicitly once the IKE_SA is established.
+	children := childNamesFromConfig(connection)
+	for _, child := range children {
+		out, err := exec.Command("swanctl", "--initiate", "--child", child).CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("swanctl initiate child %s: %w\n%s", child, err, cleanSwanctlOutput(out))
+		}
+	}
 	return nil
+}
+
+// childNamesFromConfig extracts swanctl child section names from a generated
+// connection config, e.g. "name-1 {". It ignores the connection itself.
+func childNamesFromConfig(config []byte) []string {
+	var names []string
+	lines := strings.Split(string(config), "\n")
+	inChildren := false
+	depth := 0
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		switch {
+		case strings.HasPrefix(trimmed, "children {"):
+			inChildren = true
+			depth = 1
+		case inChildren && strings.HasSuffix(trimmed, "{"):
+			if depth == 1 {
+				names = append(names, strings.TrimSpace(strings.TrimSuffix(trimmed, "{")))
+			}
+			depth++
+		case inChildren && strings.HasPrefix(trimmed, "}"):
+			depth--
+			if depth == 0 {
+				inChildren = false
+			}
+		}
+	}
+	return names
 }
 
 func cleanSwanctlOutput(out []byte) string {

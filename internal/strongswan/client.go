@@ -118,7 +118,17 @@ func (c *Client) Connect(p profile.Profile) error {
 	if err := c.run("--load-conns", "--file", connPath); err != nil {
 		return err
 	}
-	return c.run("--initiate", "--ike", p.Name)
+	if err := c.run("--initiate", "--ike", p.Name); err != nil {
+		return err
+	}
+	// In pull/XAuth mode start_action does not reliably trigger the children,
+	// so start every child explicitly once the IKE_SA is established.
+	for _, child := range p.ChildNames() {
+		if err := c.run("--initiate", "--child", child); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // Disconnect terminates the active IKE SA. swanctl deliberately has no
