@@ -93,6 +93,18 @@ func main() {
 		err = privilegedConnect(args[1:])
 	case "privileged-disconnect":
 		err = privilegedDisconnect(args[1:])
+	case "privileged-status":
+		err = privilegedStatus(args[1:])
+	case "privileged-sas":
+		err = privilegedSAS(args[1:])
+	case "privileged-logs":
+		err = privilegedLogs(args[1:])
+	case "gui-status":
+		err = guiStatus(s, args[1:])
+	case "gui-sas":
+		err = guiSAS(s, args[1:])
+	case "gui-logs":
+		err = guiLogs(args[1:])
 	default:
 		usage()
 		os.Exit(2)
@@ -400,7 +412,7 @@ func privilegedConnect(args []string) error {
 	if !strings.Contains(string(loaded), args[2]) {
 		return fmt.Errorf("o strongSwan não carregou o perfil %q. Resultado do carregamento:\n%s", args[2], cleanSwanctlOutput(loadOutput))
 	}
-	out, err := exec.Command("swanctl", "--initiate", "--ike", args[2], "--child", args[2]).CombinedOutput()
+	out, err := exec.Command("swanctl", "--initiate", "--ike", args[2]).CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("swanctl initiate: %w\n%s", err, cleanSwanctlOutput(out))
 	}
@@ -432,5 +444,95 @@ func privilegedDisconnect(args []string) error {
 	if err != nil {
 		return fmt.Errorf("swanctl terminate: %w\n%s", err, strings.TrimSpace(string(out)))
 	}
+	return nil
+}
+
+// guiStatus reports the current IKE SA state for a profile through pkexec,
+// so the desktop GUI never has to invoke sudo from a terminal-less session.
+func guiStatus(s *store.Store, args []string) error {
+	name, err := requireName(args, "gui-status")
+	if err != nil {
+		return err
+	}
+	if _, err := s.Get(name); err != nil {
+		return err
+	}
+	return runPrivilegedHelper("privileged-status", name)
+}
+
+// guiSAS returns structured CHILD_SA counters for a profile, enabling the
+// GUI to render live input/output rates.
+func guiSAS(s *store.Store, args []string) error {
+	name, err := requireName(args, "gui-sas")
+	if err != nil {
+		return err
+	}
+	if _, err := s.Get(name); err != nil {
+		return err
+	}
+	return runPrivilegedHelper("privileged-sas", name)
+}
+
+// guiLogs returns the recent strongSwan service logs through pkexec.
+func guiLogs(args []string) error {
+	if len(args) != 0 {
+		return errors.New("gui-logs não recebe argumentos")
+	}
+	return runPrivilegedHelper("privileged-logs")
+}
+
+// runPrivilegedHelper re-invokes this binary through pkexec with one of the
+// privileged-* subcommands. Only local active users granted by the polkit
+// rule can run it, and it exposes just the narrow swanctl operations below.
+func runPrivilegedHelper(sub string, args ...string) error {
+	self, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("localizar PiperSec: %w", err)
+	}
+	full := append([]string{self, sub}, args...)
+	out, err := exec.Command("pkexec", full...).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("%s: %w\n%s", sub, err, strings.TrimSpace(string(out)))
+	}
+	fmt.Print(string(out))
+	return nil
+}
+
+// privileged-status prints the human-readable SA list for one IKE name.
+func privilegedStatus(args []string) error {
+	if len(args) != 1 {
+		return errors.New("uso interno inválido: privileged-status")
+	}
+	out, err := exec.Command("swanctl", "--list-sas", "--ike", args[0]).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("swanctl status: %w\n%s", err, cleanSwanctlOutput(out))
+	}
+	fmt.Print(string(out))
+	return nil
+}
+
+// privileged-sas prints structured CHILD_SA counters parsed from swanctl --raw.
+func privilegedSAS(args []string) error {
+	if len(args) != 1 {
+		return errors.New("uso interno inválido: privileged-sas")
+	}
+	out, err := exec.Command("swanctl", "--list-sas", "--ike", args[0], "--raw").CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("swanctl sas: %w\n%s", err, cleanSwanctlOutput(out))
+	}
+	fmt.Println(strongswan.ParseSASRaw(string(out)).JSON())
+	return nil
+}
+
+// privileged-logs prints the tail of the strongSwan service journal.
+func privilegedLogs(args []string) error {
+	if len(args) != 0 {
+		return errors.New("uso interno inválido: privileged-logs")
+	}
+	out, err := exec.Command("journalctl", "-u", "strongswan.service", "--no-pager", "-n", "200", "--output=short").CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("journalctl strongswan: %w\n%s", err, strings.TrimSpace(string(out)))
+	}
+	fmt.Print(string(out))
 	return nil
 }

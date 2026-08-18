@@ -98,16 +98,39 @@ func quoted(v string) string {
 }
 
 // RenderConnection returns a self-contained swanctl connection configuration.
+//
+// Each remote traffic selector is rendered as its own CHILD_SA with
+// start_action = start. strongSwan peers commonly narrow multi-selector
+// children to the first selector, so a dedicated child per network guarantees
+// every remote_ts entry is actually negotiated and routed.
 func (p Profile) RenderConnection() (string, error) {
 	if err := p.Validate(false); err != nil {
 		return "", err
 	}
-	// Convert comma-separated networks to space-separated for strongSwan.
 	parts := strings.Split(p.RemoteTS, ",")
 	for i := range parts {
 		parts[i] = strings.TrimSpace(parts[i])
 	}
-	remoteTS := strings.Join(parts, " ")
+	var children strings.Builder
+	for i, net := range parts {
+		child := p.Name
+		if len(parts) > 1 {
+			child = fmt.Sprintf("%s-%d", p.Name, i+1)
+		}
+		fmt.Fprintf(&children, `            %s {
+                mode = tunnel
+                local_ts = dynamic
+                remote_ts = %s
+                esp_proposals = %s
+                life_time = %s
+                rekey_time = %s
+                rand_time = 0s
+                replay_window = 32
+                dpd_action = restart
+                start_action = start
+            }
+`, child, net, p.ESPProposal, p.LifeTime, p.RekeyTime)
+	}
 	return fmt.Sprintf(`connections {
     %s {
         version = %d
@@ -128,22 +151,10 @@ func (p Profile) RenderConnection() (string, error) {
         }
         remote { auth = psk }
         children {
-            %s {
-                mode = tunnel
-                local_ts = dynamic
-                remote_ts = %s
-                esp_proposals = %s
-                life_time = %s
-                rekey_time = %s
-                rand_time = 0s
-                replay_window = 32
-                dpd_action = restart
-                start_action = none
-            }
-        }
+%s        }
     }
 }
-`, p.Name, p.Version, yesNo(p.Aggressive), p.RemoteAddress, p.VirtualIP, yesNo(p.Pull), p.IKEProposal, p.ReauthTime, p.DPDDelay, p.DPDTimeout, quoted(p.XAuthUsername), p.Name, remoteTS, p.ESPProposal, p.LifeTime, p.RekeyTime), nil
+`, p.Name, p.Version, yesNo(p.Aggressive), p.RemoteAddress, p.VirtualIP, yesNo(p.Pull), p.IKEProposal, p.ReauthTime, p.DPDDelay, p.DPDTimeout, quoted(p.XAuthUsername), children.String()), nil
 }
 
 func yesNo(value bool) string {

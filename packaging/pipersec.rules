@@ -1,0 +1,10 @@
+// PiperSec - authorize pkexec for the vpnctl helper without a password
+// prompt. Only the narrow privileged-* swanctl subcommands are exposed by
+// /usr/bin/vpnctl, so granting this single binary keeps the surface small.
+polkit.addRule(function(action, subject) {
+    if (action.id == "org.freedesktop.policykit.exec" &&
+        action.lookup("program") == "/usr/bin/vpnctl" &&
+        subject.local && subject.active) {
+        return polkit.Result.YES;
+    }
+});

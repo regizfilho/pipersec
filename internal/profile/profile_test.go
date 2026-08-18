@@ -58,9 +58,18 @@ func TestMultipleRemoteTSNetworks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// strongSwan uses space-separated networks
-	if !strings.Contains(got, "remote_ts = 10.0.0.0/8 192.168.0.0/16") {
-		t.Errorf("multiple remote_ts not properly converted to space-separated format: %s", got)
+	// Each network becomes its own CHILD_SA because peers narrow multi-selector
+	// children to the first selector.
+	for _, part := range []string{
+		"remote_ts = 10.0.0.0/8",
+		"remote_ts = 192.168.0.0/16",
+		"clinica-1 {",
+		"clinica-2 {",
+		"start_action = start",
+	} {
+		if !strings.Contains(got, part) {
+			t.Errorf("missing %q in rendered connection: %s", part, got)
+		}
 	}
 }
 

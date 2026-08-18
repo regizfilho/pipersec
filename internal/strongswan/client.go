@@ -118,7 +118,7 @@ func (c *Client) Connect(p profile.Profile) error {
 	if err := c.run("--load-conns", "--file", connPath); err != nil {
 		return err
 	}
-	return c.run("--initiate", "--child", p.Name)
+	return c.run("--initiate", "--ike", p.Name)
 }
 
 // Disconnect terminates the active IKE SA. swanctl deliberately has no

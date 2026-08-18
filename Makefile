@@ -20,6 +20,7 @@ install: build
 	install -Dm644 packaging/vpnctl.desktop $(DESTDIR)$(PREFIX)/share/applications/vpnctl.desktop
 	install -Dm644 packaging/br.com.codepiper.PiperSec.metainfo.xml $(DESTDIR)$(PREFIX)/share/metainfo/br.com.codepiper.PiperSec.metainfo.xml
 	install -Dm644 packaging/br.com.codepiper.PiperSec.svg $(DESTDIR)$(PREFIX)/share/icons/hicolor/scalable/apps/br.com.codepiper.PiperSec.svg
+	install -Dm644 packaging/pipersec.rules $(DESTDIR)/etc/polkit-1/rules.d/50-pipersec.rules
 
 uninstall:
 	rm -f $(DESTDIR)$(PREFIX)/bin/$(BIN)
@@ -27,6 +28,7 @@ uninstall:
 	rm -f $(DESTDIR)$(PREFIX)/share/applications/vpnctl.desktop
 	rm -f $(DESTDIR)$(PREFIX)/share/metainfo/br.com.codepiper.PiperSec.metainfo.xml
 	rm -f $(DESTDIR)$(PREFIX)/share/icons/hicolor/scalable/apps/br.com.codepiper.PiperSec.svg
+	rm -f $(DESTDIR)/etc/polkit-1/rules.d/50-pipersec.rules
 
 package: test build
 	mkdir -p dist
@@ -43,5 +45,6 @@ deb: build
 	install -Dm755 packaging/postinst $(DEB_ROOT)/DEBIAN/postinst
 	install -Dm644 packaging/br.com.codepiper.PiperSec.metainfo.xml $(DEB_ROOT)/usr/share/metainfo/br.com.codepiper.PiperSec.metainfo.xml
 	install -Dm644 packaging/br.com.codepiper.PiperSec.svg $(DEB_ROOT)/usr/share/icons/hicolor/scalable/apps/br.com.codepiper.PiperSec.svg
+	install -Dm644 packaging/pipersec.rules $(DEB_ROOT)/etc/polkit-1/rules.d/50-pipersec.rules
 	sed 's/@VERSION@/$(VERSION)/' packaging/debian-control > $(DEB_ROOT)/DEBIAN/control
 	dpkg-deb --build --root-owner-group $(DEB_ROOT) dist/vpnctl_$(VERSION)_amd64.deb
