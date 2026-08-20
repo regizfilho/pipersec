@@ -110,13 +110,31 @@ func (c *Client) Connect(p profile.Profile) error {
 		}
 		return nil
 	}
+	// The system strongSwan installation may restrict swanctl from opening
+	// user-owned files under /tmp even when swanctl is launched via sudo. Use
+	// the privileged helper so it places a short-lived config under
+	// /etc/swanctl/conf.d, where the daemon already loads configuration.
+	if len(c.Elevator) > 0 {
+		helper, err := os.Executable()
+		if err != nil {
+			return fmt.Errorf("localizar PiperSec: %w", err)
+		}
+		args := append(append([]string{}, c.Elevator[1:]...), helper, "privileged-connect", connPath, secretPath, p.Name)
+		output, err := c.Runner.Run(c.Elevator[0], args...)
+		if err != nil {
+			return fmt.Errorf("conectar %s: %w\n%s", p.Name, err, strings.TrimSpace(string(output)))
+		}
+		return nil
+	}
 	if err := c.run("--load-creds", "--file", secretPath); err != nil {
 		return err
 	}
-	// Load credentials first: the daemon resolves PSK/XAuth references while
-	// processing the connection configuration.
-	if err := c.run("--load-conns", "--file", connPath); err != nil {
-		return err
+	loaded, err := c.execute("--load-conns", "--file", connPath)
+	if err != nil {
+		return fmt.Errorf("carregar conexão: %w\n%s", err, strings.TrimSpace(string(loaded)))
+	}
+	if !strings.Contains(string(loaded), "loaded connection '"+p.Name+"'") {
+		return fmt.Errorf("strongSwan não confirmou o carregamento da conexão %q: %s", p.Name, strings.TrimSpace(string(loaded)))
 	}
 	if err := c.run("--initiate", "--ike", p.Name); err != nil {
 		return err

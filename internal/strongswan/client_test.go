@@ -15,6 +15,9 @@ type fakeRunner struct{ calls []call }
 
 func (f *fakeRunner) Run(name string, args ...string) ([]byte, error) {
 	f.calls = append(f.calls, call{name, args})
+	if strings.Contains(fmt.Sprint(args), "--load-conns") {
+		return []byte("loaded connection 'office'"), nil
+	}
 	return []byte("ok"), nil
 }
 func activeProfile() profile.Profile {
@@ -35,7 +38,7 @@ func TestConnectRunsExpectedSwanctlOperations(t *testing.T) {
 	if len(r.calls) != 5 {
 		t.Fatalf("calls=%d", len(r.calls))
 	}
-	for _, x := range []string{"--load-conns", "--load-creds", "--initiate"} {
+	for _, x := range []string{"--load-creds", "--load-conns", "--initiate"} {
 		if !strings.Contains(fmt.Sprint(r.calls), x) {
 			t.Errorf("missing %s", x)
 		}
