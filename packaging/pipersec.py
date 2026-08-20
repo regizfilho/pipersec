@@ -4,7 +4,7 @@ gi.require_version("Gtk", "3.0")
 gi.require_version("AyatanaAppIndicator3", "0.1")
 from gi.repository import Gtk, AyatanaAppIndicator3, Gdk, Gio, GLib
 
-DEFAULTS = {"version":1,"aggressive":True,"virtual_ip":"0.0.0.0","pull":True,"ike_proposal":"aes256-sha256-ecp384","esp_proposal":"aes256-sha256-ecp384","reauth_time":"43200s","dpd_delay":"30s","dpd_timeout":"150s","remote_ts":"0.0.0.0/0","life_time":"43200s","rekey_time":"38880s"}
+DEFAULTS = {"version":1,"aggressive":False,"virtual_ip":"0.0.0.0","pull":True,"ike_proposal":"aes128-sha256-modp1536,aes128-sha256-modp2048","esp_proposal":"aes128-sha256-modp1536,aes256-sha256-modp1536","reauth_time":"86400s","dpd_delay":"30s","dpd_timeout":"150s","remote_ts":"0.0.0.0/0","life_time":"43200s","rekey_time":"38880s"}
 
 POLL_MS = 2000
 CMD_TIMEOUT = 15
@@ -474,7 +474,7 @@ class PiperSec(Gtk.Application):
         on_routing_changed(routing)
         def combo(row,label,key,tip):
             c=Gtk.ComboBoxText()
-            opts=["aes256-sha256-ecp384","aes256-sha256-modp2048","aes256-sha256-modp3072","aes128-sha256-modp2048"]
+            opts=["aes128-sha256-modp1536,aes128-sha256-modp2048","aes128-sha256-modp1536","aes128-sha256-modp2048","aes256-sha256-ecp384","aes256-sha256-modp2048","aes256-sha256-modp3072"]
             [c.append_text(x) for x in opts]
             c.set_active(opts.index(p[key]) if p[key] in opts else 0)
             c.set_tooltip_text(tip)

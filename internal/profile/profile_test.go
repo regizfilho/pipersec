@@ -19,9 +19,27 @@ func TestRenderConnectionIncludesIKEv1XAuthFields(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, part := range []string{"version = 1", "aggressive = yes", "pull = yes", "xauth_id = \"usuario.teste\"", "esp_proposals = aes256-sha256-ecp384"} {
+	for _, part := range []string{"version = 1", "aggressive = no", "pull = yes", "xauth_id = \"usuario.teste\"", "esp_proposals = aes128-sha256-modp1536,aes256-sha256-modp1536"} {
 		if !strings.Contains(got, part) {
 			t.Errorf("missing %q", part)
+		}
+	}
+}
+
+func TestDefaultsMatchUnimedMainModeProfile(t *testing.T) {
+	p := Defaults("unimed")
+	if p.Aggressive {
+		t.Fatal("Unimed profile must use IKEv1 main mode")
+	}
+	checks := map[string][2]string{
+		"IKE proposal": {p.IKEProposal, "aes128-sha256-modp1536,aes128-sha256-modp2048"},
+		"ESP proposal": {p.ESPProposal, "aes128-sha256-modp1536,aes256-sha256-modp1536"},
+		"reauth time":  {p.ReauthTime, "86400s"},
+		"life time":    {p.LifeTime, "43200s"},
+	}
+	for field, values := range checks {
+		if values[0] != values[1] {
+			t.Errorf("%s = %q, want %q", field, values[0], values[1])
 		}
 	}
 }

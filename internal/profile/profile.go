@@ -37,9 +37,9 @@ type Profile struct {
 // remote_ts uses a restrictive default (single host) to enable split
 // tunneling — only traffic matching this selector goes through the VPN.
 func Defaults(name string) Profile {
-	return Profile{Name: name, Version: 1, Aggressive: true, VirtualIP: "0.0.0.0", Pull: true,
-		IKEProposal: "aes256-sha256-ecp384", ESPProposal: "aes256-sha256-ecp384",
-		ReauthTime: "43200s", DPDDelay: "30s", DPDTimeout: "150s", RemoteTS: "10.0.0.0/8,192.168.1.0/24",
+	return Profile{Name: name, Version: 1, Aggressive: false, VirtualIP: "0.0.0.0", Pull: true,
+		IKEProposal: "aes128-sha256-modp1536,aes128-sha256-modp2048", ESPProposal: "aes128-sha256-modp1536,aes256-sha256-modp1536",
+		ReauthTime: "86400s", DPDDelay: "30s", DPDTimeout: "150s", RemoteTS: "10.0.0.0/8,192.168.1.0/24",
 		LifeTime: "43200s", RekeyTime: "38880s"}
 }
 

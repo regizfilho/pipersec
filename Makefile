@@ -1,7 +1,7 @@
 BIN := vpnctl
 GUI_BIN := vpnctl-gui
 PREFIX ?= /usr/local
-VERSION ?= 2.0.0
+VERSION ?= 2.0.1
 DEB_ROOT := dist/deb-root
 
 .PHONY: build test install uninstall package deb
