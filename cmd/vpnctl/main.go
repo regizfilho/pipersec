@@ -25,7 +25,9 @@ Comandos:
   add <nome>             cria um perfil (credenciais exigidas)
   edit <nome>            altera campos de um perfil existente
   list                   lista os perfis salvos
-  show <nome>            exibe um perfil, sem segredos
+	show <nome>            exibe um perfil, sem segredos
+	export <nome>          exporta um perfil JSON sem segredos por padrão
+	import <arquivo>       importa um perfil JSON
   delete <nome>          remove um perfil local
   render <nome>          imprime a configuração swanctl, sem segredos
   connect <nome>         carrega e inicia a VPN com sudo swanctl
@@ -69,6 +71,10 @@ func main() {
 		err = list(s, args[1:])
 	case "show":
 		err = show(s, args[1:])
+	case "export":
+		err = exportProfile(s, args[1:])
+	case "import":
+		err = importProfile(s, args[1:])
 	case "delete":
 		err = deleteProfile(s, args[1:])
 	case "render":
@@ -216,6 +222,87 @@ func show(s *store.Store, args []string) error {
 	fmt.Printf("Nome: %s\nGateway: %s\nIKE: v%d (agressivo: %t)\nUsuário XAuth: %s\nIdentidade PSK: %s\nVIP: %s\nPropostas: %s / %s\nRedes remotas: %s\nSegredos: armazenados cifrados (ocultos)\n", p.Name, p.RemoteAddress, p.Version, p.Aggressive, p.XAuthUsername, p.PSKIdentity, p.VirtualIP, p.IKEProposal, p.ESPProposal, p.RemoteTS)
 	return nil
 }
+
+func exportProfile(s *store.Store, args []string) error {
+	if len(args) == 0 {
+		return errors.New("uso: vpnctl export <nome> --file ARQUIVO [--include-secrets]")
+	}
+	name := args[0]
+	p, err := s.Get(name)
+	if err != nil {
+		return err
+	}
+	fs := flag.NewFlagSet("export", flag.ContinueOnError)
+	fs.SetOutput(os.Stderr)
+	file := fs.String("file", "", "arquivo JSON de destino")
+	includeSecrets := fs.Bool("include-secrets", false, "inclui credenciais no arquivo exportado")
+	if err := fs.Parse(args[1:]); err != nil {
+		return err
+	}
+	if fs.NArg() != 0 || *file == "" {
+		return errors.New("uso: vpnctl export <nome> --file ARQUIVO [--include-secrets]")
+	}
+	data, err := profile.ExportJSON(p, *includeSecrets)
+	if err != nil {
+		return err
+	}
+	out, err := os.OpenFile(*file, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+	if err != nil {
+		return fmt.Errorf("criar arquivo de exportação: %w", err)
+	}
+	if _, err := out.Write(data); err != nil {
+		out.Close()
+		return fmt.Errorf("gravar arquivo de exportação: %w", err)
+	}
+	if err := out.Close(); err != nil {
+		return fmt.Errorf("fechar arquivo de exportação: %w", err)
+	}
+	fmt.Printf("Perfil %q exportado para %s\n", name, *file)
+	if !*includeSecrets {
+		fmt.Println("Credenciais não incluídas; use --include-secrets somente em arquivo protegido.")
+	}
+	return nil
+}
+
+func importProfile(s *store.Store, args []string) error {
+	fs := flag.NewFlagSet("import", flag.ContinueOnError)
+	fs.SetOutput(os.Stderr)
+	name := fs.String("name", "", "nome para substituir o nome importado")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if fs.NArg() != 1 {
+		return errors.New("uso: vpnctl import ARQUIVO [--name NOME]")
+	}
+	data, err := os.ReadFile(fs.Arg(0))
+	if err != nil {
+		return fmt.Errorf("ler arquivo de importação: %w", err)
+	}
+	p, err := profile.ImportJSON(data)
+	if err != nil {
+		return err
+	}
+	if *name != "" {
+		p.Name = *name
+	}
+	if old, err := s.Get(p.Name); err == nil {
+		if p.XAuthPassword == "" {
+			p.XAuthPassword = old.XAuthPassword
+		}
+		if p.PSK == "" {
+			p.PSK = old.PSK
+		}
+	}
+	if err := p.Validate(false); err != nil {
+		return fmt.Errorf("validar perfil importado: %w", err)
+	}
+	if err := s.Put(p); err != nil {
+		return fmt.Errorf("salvar perfil importado: %w", err)
+	}
+	fmt.Printf("Perfil %q importado com sucesso\n", p.Name)
+	return nil
+}
+
 func deleteProfile(s *store.Store, args []string) error {
 	name, err := requireName(args, "delete")
 	if err != nil {

@@ -17,6 +17,7 @@
     <p>Crie, edite, conecte, desconecte e consulte o estado de múltiplas VPNs strongSwan por uma interface gráfica simples.</p>
   </description>
   <releases>
+    <release version="2.1.0" date="2026-08-20"/>
     <release version="2.0.2" date="2026-08-20"/>
     <release version="2.0.1" date="2026-08-20"/>
     <release version="1.0.0" date="2026-07-30"/>
